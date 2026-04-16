@@ -861,7 +861,7 @@ with tab_cal:
 # ─────────────────────────────────────────────
 # GITHUB BUTTON (fixed top-right)
 # ─────────────────────────────────────────────
-GITHUB_URL = "https://github.com/tp2322/MPSIF-Earnings-Calendar"
+GITHUB_URL = "https://github.com/tp2322/MPSIF-Earnings-Cal"
 
 st.markdown(f"""
 <a href="{GITHUB_URL}" target="_blank" style="
