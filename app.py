@@ -508,14 +508,14 @@ st.markdown('<h1 class="main-header">MPSIF Earnings Calendar</h1>', unsafe_allow
 meta = st.session_state.upload_meta
 if meta.get("filename"):
     st.markdown(
-        f'<p class="main-subheader"> · '
+        f'<p class="main-subheader">Long-only equity fund · NYU Stern · '
         f'Positions from <span class="cache-pill">{meta["filename"]}</span> '
         f'<span class="cache-pill cache-pill-warn">uploaded {meta.get("uploaded_at","")}</span></p>',
         unsafe_allow_html=True,
     )
 else:
     st.markdown(
-        '<p class="main-subheader"> · '
+        '<p class="main-subheader">Long-only equity fund · NYU Stern · '
         'Upload a Fidelity positions CSV to get started</p>',
         unsafe_allow_html=True,
     )
@@ -856,6 +856,46 @@ with tab_cal:
                     f" &nbsp;·&nbsp; {d.strftime('%A, %B %d')} &nbsp; {earnings_badge(d)}",
                     unsafe_allow_html=True,
                 )
+
+
+# ─────────────────────────────────────────────
+# GITHUB BUTTON (fixed top-right)
+# ─────────────────────────────────────────────
+GITHUB_URL = "https://github.com/tp2322/MPSIF-Earnings-Calendar"
+
+st.markdown(f"""
+<a href="{GITHUB_URL}" target="_blank" style="
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 9999;
+    background: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    color: #8b949e;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: border-color 0.2s, color 0.2s;
+" onmouseover="this.style.borderColor='#58a6ff';this.style.color='#58a6ff'"
+   onmouseout="this.style.borderColor='#30363d';this.style.color='#8b949e'">
+  <svg height="14" width="14" viewBox="0 0 16 16" fill="currentColor">
+    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+    0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13
+    -.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66
+    .07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15
+    -.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0
+    1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82
+    1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01
+    1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+  </svg>
+  Source on GitHub
+</a>
+""", unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
