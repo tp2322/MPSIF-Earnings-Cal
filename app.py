@@ -508,14 +508,14 @@ st.markdown('<h1 class="main-header">MPSIF Earnings Calendar</h1>', unsafe_allow
 meta = st.session_state.upload_meta
 if meta.get("filename"):
     st.markdown(
-        f'<p class="main-subheader">MPSIF · '
+        f'<p class="main-subheader"> · '
         f'Positions from <span class="cache-pill">{meta["filename"]}</span> '
         f'<span class="cache-pill cache-pill-warn">uploaded {meta.get("uploaded_at","")}</span></p>',
         unsafe_allow_html=True,
     )
 else:
     st.markdown(
-        '<p class="main-subheader">MPSIF · '
+        '<p class="main-subheader"> · '
         'Upload a Fidelity positions CSV to get started</p>',
         unsafe_allow_html=True,
     )
