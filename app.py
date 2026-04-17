@@ -664,54 +664,100 @@ def earnings_badge(d):
 
 
 # ─────────────────────────────────────────────
-# EMAIL
+# EMAIL — WEEKLY DIGEST
 # ─────────────────────────────────────────────
-def send_earnings_reminder(smtp_host, smtp_port, smtp_user, smtp_pass,
-                           to_email, analyst_name, holdings_rows):
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"MPSIF Earnings Reminder — {analyst_name}"
-    msg["From"]    = smtp_user
-    msg["To"]      = to_email
+def get_next_week_range():
+    """Returns (monday, sunday) for the upcoming Monday–Sunday."""
+    today = date.today()
+    days_ahead = (7 - today.weekday()) % 7
+    if days_ahead == 0:
+        days_ahead = 7   # if today is Monday, next week
+    monday = today + pd.Timedelta(days=days_ahead)
+    sunday = monday + pd.Timedelta(days=6)
+    return monday, sunday
 
-    rows_html = ""
-    for row in holdings_rows:
-        d = row["earnings_date"]
-        n = days_until(d) if d else None
-        days_str = (f"in {n} day{'s' if n != 1 else ''}"
-                    if (n is not None and n >= 0)
-                    else (d.strftime("%b %d") if d else "TBD"))
-        rows_html += f"""
-        <tr>
-          <td style="padding:8px 12px;font-family:monospace;font-weight:600;">{row['ticker']}</td>
-          <td style="padding:8px 12px;">{row['company']}</td>
-          <td style="padding:8px 12px;font-family:monospace;">{d.strftime('%B %d, %Y') if d else 'TBD'}</td>
-          <td style="padding:8px 12px;color:#16a34a;font-family:monospace;">{days_str}</td>
-        </tr>"""
 
-    html = f"""<html><body style="background:#f0f2f6;color:#1a1a2e;
-        font-family:'Inter',sans-serif;padding:24px;">
-      <h2 style="color:#1e3a5f;">MPSIF — Earnings Reminder</h2>
-      <p>Hi {analyst_name}, here are upcoming earnings for your holdings:</p>
-      <table style="border-collapse:collapse;width:100%;background:#fff;
-          border:1px solid #e2e8f0;border-radius:8px;">
-        <thead>
-          <tr style="background:#f8fafc;color:#94a3b8;font-size:0.75rem;text-transform:uppercase;">
-            <th style="padding:8px 12px;text-align:left;">Ticker</th>
-            <th style="padding:8px 12px;text-align:left;">Company</th>
-            <th style="padding:8px 12px;text-align:left;">Earnings Date</th>
-            <th style="padding:8px 12px;text-align:left;">When</th>
-          </tr>
-        </thead>
-        <tbody>{rows_html}</tbody>
-      </table>
-      <p style="color:#94a3b8;font-size:0.82rem;margin-top:20px;">— MPSIF Earnings Calendar</p>
+def get_this_week_range():
+    """Returns (monday, sunday) for the current week."""
+    today  = date.today()
+    monday = today - pd.Timedelta(days=today.weekday())
+    sunday = monday + pd.Timedelta(days=6)
+    return monday, sunday
+
+
+def build_digest_html(smtp_user, to_emails, earnings_rows, week_start, week_end):
+    week_label = f"{week_start.strftime('%b %d')} – {week_end.strftime('%b %d, %Y')}"
+    n = len(earnings_rows)
+    if not earnings_rows:
+        body = "<p style='color:#64748b;'>No MPSIF holdings report earnings this week.</p>"
+    else:
+        rows_html = ""
+        for row in sorted(earnings_rows, key=lambda r: r["earnings_date"]):
+            d       = row["earnings_date"]
+            day_str = d.strftime("%A, %b %d")
+            nd      = days_until(d)
+            timing  = ("TODAY" if nd == 0 else f"in {nd}d" if nd and nd > 0 else d.strftime("%b %d"))
+            eps_str = fmt_eps(row.get("eps_est")) or "—"
+            rev_str = fmt_revenue(row.get("rev_est")) or "—"
+            rows_html += f"""
+            <tr style="border-bottom:1px solid #f1f5f9;">
+              <td style="padding:10px 14px;">
+                <span style="background:#1e3a5f;color:#fff;font-family:monospace;
+                  font-weight:600;font-size:13px;padding:2px 8px;border-radius:4px;">{row["ticker"]}</span>
+              </td>
+              <td style="padding:10px 14px;font-weight:500;color:#1e293b;">{row["company"]}</td>
+              <td style="padding:10px 14px;font-family:monospace;font-size:13px;color:#475569;">{day_str}</td>
+              <td style="padding:10px 14px;color:#16a34a;font-weight:600;font-size:13px;">{timing}</td>
+              <td style="padding:10px 14px;font-family:monospace;font-size:13px;color:#334155;">{eps_str}</td>
+              <td style="padding:10px 14px;font-family:monospace;font-size:13px;color:#334155;">{rev_str}</td>
+            </tr>"""
+        body = f"""
+        <table style="border-collapse:collapse;width:100%;background:#fff;
+          border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+          <thead>
+            <tr style="background:#f8fafc;color:#94a3b8;font-size:11px;text-transform:uppercase;letter-spacing:.08em;">
+              <th style="padding:10px 14px;text-align:left;">Ticker</th>
+              <th style="padding:10px 14px;text-align:left;">Company</th>
+              <th style="padding:10px 14px;text-align:left;">Date</th>
+              <th style="padding:10px 14px;text-align:left;">When</th>
+              <th style="padding:10px 14px;text-align:left;">EPS Est (Q)</th>
+              <th style="padding:10px 14px;text-align:left;">Rev Est (Q)</th>
+            </tr>
+          </thead>
+          <tbody>{rows_html}</tbody>
+        </table>"""
+
+    return f"""<html><body style="background:#f0f2f6;font-family:Arial,sans-serif;padding:32px;color:#1a1a2e;">
+      <div style="max-width:660px;margin:0 auto;">
+        <div style="background:linear-gradient(135deg,#1e3a5f,#2d5986);border-radius:12px;
+          padding:24px 28px;margin-bottom:24px;">
+          <h1 style="color:#fff;margin:0;font-size:22px;font-weight:700;">
+            📅 MPSIF — Earnings This Week
+          </h1>
+          <p style="color:rgba(255,255,255,.65);margin:6px 0 0;font-size:13px;">
+            {week_label} &nbsp;·&nbsp; {n} position{"s" if n != 1 else ""} reporting
+          </p>
+        </div>
+        {body}
+        <p style="color:#94a3b8;font-size:11px;margin-top:20px;text-align:center;">
+          MPSIF Earnings Calendar · Data via Yahoo Finance · Estimates are next-quarter consensus
+        </p>
+      </div>
     </body></html>"""
 
-    msg.attach(MIMEText(html, "html"))
+
+def send_digest(smtp_host, smtp_port, smtp_user, smtp_pass,
+                to_emails, earnings_rows, week_start, week_end):
+    week_label = f"{week_start.strftime('%b %d')} – {week_end.strftime('%b %d, %Y')}"
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"MPSIF Earnings This Week ({week_label})"
+    msg["From"]    = smtp_user
+    msg["To"]      = ", ".join(to_emails)
+    msg.attach(MIMEText(build_digest_html(smtp_user, to_emails, earnings_rows, week_start, week_end), "html"))
     with smtplib.SMTP(smtp_host, int(smtp_port)) as s:
         s.starttls()
         s.login(smtp_user, smtp_pass)
-        s.sendmail(smtp_user, to_email, msg.as_string())
+        s.sendmail(smtp_user, to_emails, msg.as_string())
 
 
 # ─────────────────────────────────────────────
@@ -861,33 +907,60 @@ with st.sidebar:
             save_analyst_emails(updated_emails)
             st.success("Saved.")
 
-    with st.expander("Send Reminders"):
-        send_to     = st.multiselect("Send to", [a for a in ANALYSTS if a != "Unassigned"],
-                                     default=[a for a in ANALYSTS if a != "Unassigned"], key="send_to")
-        days_filter = st.slider("Earnings within X days", 1, 90, 30)
-        if st.button("Send"):
+    with st.expander("📨 Weekly Digest"):
+        st.caption(
+            "Sends ONE email to the whole team listing all positions "
+            "reporting in the upcoming week (Mon–Sun). "
+            "Set this up to run every Monday morning via GitHub Actions."
+        )
+        digest_week = st.radio(
+            "Which week?",
+            ["Next week (recommended)", "This week"],
+            key="digest_week",
+        )
+        if st.button("Send Digest Now"):
             if not smtp_user or not smtp_pass:
                 st.error("Fill in SMTP settings first.")
             else:
-                sent = failed = 0
-                for analyst in send_to:
-                    email = st.session_state.analyst_emails.get(analyst, "")
-                    if not email: continue
-                    email_rows = []
+                all_emails = [
+                    st.session_state.analyst_emails.get(a, "")
+                    for a in ANALYSTS if a != "Unassigned"
+                ]
+                all_emails = [e for e in all_emails if e]
+                if not all_emails:
+                    st.error("No analyst emails saved. Fill in Member Emails above.")
+                else:
+                    if digest_week == "Next week (recommended)":
+                        week_start, week_end = get_next_week_range()
+                    else:
+                        week_start, week_end = get_this_week_range()
+
+                    # Find all holdings with earnings in that window
+                    digest_rows = []
                     for h in st.session_state.holdings:
                         ed, _, _ = fetch_earnings_date(h["ticker"])
-                        n = days_until(ed)
-                        if n is not None and 0 <= n <= days_filter:
-                            email_rows.append({**h, "earnings_date": ed})
-                    if not email_rows: continue
+                        if ed and week_start <= ed <= week_end:
+                            ests = fetch_estimates(h["ticker"])
+                            digest_rows.append({
+                                **h,
+                                "earnings_date": ed,
+                                "eps_est": ests["eps_est"],
+                                "rev_est": ests["rev_est"],
+                            })
+
+                    wl = f"{week_start.strftime('%b %d')}–{week_end.strftime('%b %d')}"
                     try:
-                        send_earnings_reminder(smtp_host, smtp_port, smtp_user, smtp_pass,
-                                               email, analyst, email_rows)
-                        sent += 1
+                        send_digest(smtp_host, smtp_port, smtp_user, smtp_pass,
+                                    all_emails, digest_rows, week_start, week_end)
+                        if digest_rows:
+                            st.success(
+                                f"✓ Digest sent to {len(all_emails)} members — "
+                                f"{len(digest_rows)} position(s) reporting {wl}."
+                            )
+                        else:
+                            st.info(f"Digest sent — no holdings report earnings {wl}.")
                     except Exception as e:
-                        failed += 1
-                        st.error(f"{analyst}: {e}")
-                st.success(f"Sent {sent}, failed {failed}.")
+                        st.error(f"Failed to send: {e}")
 
 
 # ─────────────────────────────────────────────
@@ -1052,11 +1125,17 @@ with tab_cal:
       </div>
     </div>""", unsafe_allow_html=True)
 
-    if event_map:
+    two_weeks_out = today + pd.Timedelta(days=14)
+    upcoming_events = {
+        d: tickers for d, tickers in event_map.items()
+        if today <= d <= two_weeks_out
+    }
+
+    if upcoming_events:
         st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown('<div class="section-label">Events This Month</div>', unsafe_allow_html=True)
-        for d in sorted(event_map.keys()):
-            for ticker in event_map[d]:
+        st.markdown('<div class="section-label">Events In Next Two Weeks</div>', unsafe_allow_html=True)
+        for d in sorted(upcoming_events.keys()):
+            for ticker in upcoming_events[d]:
                 row = next((x for x in rows if x["ticker"] == ticker), {})
                 st.markdown(
                     f'<span class="ticker-chip">{ticker}</span>'
@@ -1065,6 +1144,12 @@ with tab_cal:
                     f'&nbsp; {earnings_badge(d)}',
                     unsafe_allow_html=True)
                 st.markdown('<div style="height:6px;"></div>', unsafe_allow_html=True)
+    elif event_map:
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-label">Events In Next Two Weeks</div>'
+            '<p style="color:#94a3b8;font-size:0.85rem;">No holdings report earnings in the next 14 days.</p>',
+            unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
