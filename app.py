@@ -64,16 +64,16 @@ section[data-testid="stSidebar"] label {
     justify-content: space-between;
 }
 .mpsif-title {
-    font-size: 1.6rem;
+    font-size: 2.2rem;
     font-weight: 700;
     color: #ffffff;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.03em;
     margin: 0;
 }
 .mpsif-subtitle {
-    font-size: 0.85rem;
-    color: rgba(255,255,255,0.65);
-    margin: 4px 0 0 0;
+    font-size: 0.83rem;
+    color: rgba(255,255,255,0.6);
+    margin: 6px 0 0 0;
 }
 .mpsif-logo {
     font-family: 'JetBrains Mono', monospace;
@@ -391,6 +391,49 @@ def save_upload_meta(m):
 
 
 # ─────────────────────────────────────────────
+# COMPANY NAME CLEANER
+# ─────────────────────────────────────────────
+import re as _re
+
+# Suffixes/noise to strip from Fidelity description strings
+_STRIP_SUFFIXES = _re.compile(
+    r"\s+("
+    r"Inc\.?|Corp(?:oration)?\.?|Ltd\.?|Llc\.?|Plc\.?|"
+    r"Sa/Nv|S\.A\.|N\.?V\.?|"
+    r"Com(?:\s+USD[\d.]+)?|Common\s+Stock|"
+    r"Ord\s+Npv.*|Adr\b.*|Spon\s+Ads.*|"
+    r"Cl\s+[A-C]\b|New\s+Cl\s+[A-C]\b|New\s+Com.*|"
+    r"Com\s+USD\d.*|Com\s+NPV.*|USD[\d.]+\b.*|"
+    r"Hldgs?\b|Bancorp\b|Bancshares?\b|"
+    r"Nv\s+Isin.*|Sedol.*|\(Di\)|Eah\b.*|Rep\s+\d+.*"
+    r")(\s+.*)?$",
+    _re.IGNORECASE
+)
+
+def clean_company_name(raw: str) -> str:
+    """
+    Strips legal/share-class noise from Fidelity description strings.
+    'Northrop Grumman Corp Com Usd1' → 'Northrop Grumman'
+    'Medpace Hldgs Inc Com' → 'Medpace'
+    'Anheuser-Busch Inbev Sa/Nv Adr...' → 'Anheuser-Busch Inbev'
+    """
+    if not raw:
+        return raw
+    name = raw.strip()
+    # Iteratively strip trailing noise
+    for _ in range(6):
+        new = _STRIP_SUFFIXES.sub("", name).strip()
+        if new == name:
+            break
+        name = new
+    # Capitalize each word, preserving hyphens
+    def cap_word(w):
+        return "-".join(p.capitalize() for p in w.split("-"))
+    name = " ".join(cap_word(w) for w in name.split())
+    return name or raw.strip()
+
+
+# ─────────────────────────────────────────────
 # FIDELITY CSV PARSER
 # ─────────────────────────────────────────────
 def parse_fidelity_csv(file_bytes: bytes) -> pd.DataFrame:
@@ -423,7 +466,7 @@ def parse_fidelity_csv(file_bytes: bytes) -> pd.DataFrame:
             )
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    df["Description"] = df["Description"].str.title()
+    df["Description"] = df["Description"].apply(clean_company_name)
     keep = [c for c in ["Symbol", "Description", "Quantity", "Last Price",
                          "Current Value", "Percent Of Account"] if c in df.columns]
     return df[keep].reset_index(drop=True)
@@ -514,65 +557,73 @@ def fetch_earnings_date(ticker: str):
 
 
 # ─────────────────────────────────────────────
-# YAHOO FINANCE — CONSENSUS ESTIMATES
+# YAHOO FINANCE — NEXT QUARTER ESTIMATES
 # ─────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_estimates(ticker: str) -> dict:
     """
-    Returns dict with keys:
-      eps_est      – forward EPS estimate (float or None)
-      rev_est      – forward revenue estimate (float or None)
-      eps_growth   – YoY EPS growth estimate % (float or None)
-      rev_growth   – YoY revenue growth estimate % (float or None)
+    Pulls next-quarter (0q) consensus EPS and revenue estimates.
+    Falls back to current-quarter (0q) from earnings_estimate DataFrame.
     """
-    out = {"eps_est": None, "rev_est": None, "eps_growth": None, "rev_growth": None}
+    out = {"eps_est": None, "rev_est": None}
     try:
-        tk   = yf.Ticker(ticker)
-        info = tk.info or {}
+        tk = yf.Ticker(ticker)
 
-        # EPS forward estimate
-        eps = info.get("forwardEps") or info.get("epsForward")
-        if eps is not None:
-            out["eps_est"] = float(eps)
-
-        # Revenue estimate — try analyst estimates first, fall back to info
-        try:
-            ae = tk.analyst_price_targets  # newer yfinance
-        except Exception:
-            ae = None
-
-        # Revenue from earnings_estimate if available
-        try:
-            rev_raw = None
-            # earningsEstimate / revenueEstimate from get_earnings_forecast
-            fc = tk.get_earnings_forecast() if hasattr(tk, "get_earnings_forecast") else None
-            if fc is not None and not fc.empty:
-                rev_raw = fc.get("revenueEstimate", {}).get("avg")
-            if rev_raw is None:
-                rev_raw = info.get("revenueEstimateAvg") or info.get("totalRevenue")
-            if rev_raw:
-                out["rev_est"] = float(rev_raw)
-        except Exception:
-            pass
-
-        # Growth rates
-        eps_g = info.get("earningsGrowth") or info.get("earningsQuarterlyGrowth")
-        if eps_g is not None:
-            out["eps_growth"] = float(eps_g) * 100
-
-        rev_g = info.get("revenueGrowth")
-        if rev_g is not None:
-            out["rev_growth"] = float(rev_g) * 100
-
-        # Better revenue estimate from analyst_price_targets or earnings_estimate
+        # Primary: earnings_estimate DataFrame has rows like "-1q","0q","1q","2q"
+        # "0q" = current quarter being reported (the one tied to the upcoming earnings date)
         try:
             ee = tk.earnings_estimate
-            if ee is not None and not ee.empty and "0q" in ee.index:
-                rev_col = next((c for c in ee.columns if "revenue" in c.lower()), None)
-                if rev_col:
-                    out["rev_est"] = float(ee.loc["0q", rev_col])
+            if ee is not None and not ee.empty:
+                # Try current quarter first, then next quarter
+                for period in ("0q", "+1q", "0y"):
+                    if period in ee.index:
+                        row = ee.loc[period]
+                        # EPS avg estimate
+                        for col in ("avg", "Avg", "average", "epsEstimate"):
+                            if col in row.index and pd.notna(row[col]):
+                                out["eps_est"] = float(row[col])
+                                break
+                        # Revenue avg estimate
+                        break  # only need the period row
         except Exception:
             pass
+
+        # Revenue: revenue_estimate DataFrame mirrors earnings_estimate
+        try:
+            re = tk.revenue_estimate
+            if re is not None and not re.empty:
+                for period in ("0q", "+1q", "0y"):
+                    if period in re.index:
+                        row = re.loc[period]
+                        for col in ("avg", "Avg", "average"):
+                            if col in row.index and pd.notna(row[col]):
+                                out["rev_est"] = float(row[col])
+                                break
+                        break
+        except Exception:
+            pass
+
+        # Fallback for EPS: calendar dict has the consensus EPS estimate for next event
+        if out["eps_est"] is None:
+            try:
+                cal = tk.calendar
+                if isinstance(cal, dict):
+                    eps_raw = cal.get("Earnings Average") or cal.get("EPS Estimate")
+                    if eps_raw is not None:
+                        out["eps_est"] = float(eps_raw)
+            except Exception:
+                pass
+
+        # Fallback for Revenue: calendar dict
+        if out["rev_est"] is None:
+            try:
+                cal = tk.calendar
+                if isinstance(cal, dict):
+                    rev_raw = cal.get("Revenue Average") or cal.get("Revenue Estimate")
+                    if rev_raw is not None:
+                        out["rev_est"] = float(rev_raw)
+            except Exception:
+                pass
 
     except Exception:
         pass
@@ -680,19 +731,16 @@ if "show_upload"    not in st.session_state:
 # HEADER BANNER
 # ─────────────────────────────────────────────
 meta = st.session_state.upload_meta
-file_tag = ""
-if meta.get("filename"):
-    file_tag = (
-        f'<span class="cache-pill">{meta["filename"]}</span>'
-        f'<span class="cache-pill-warn">{meta.get("uploaded_at","")}</span>'
-    )
+if meta.get("uploaded_at"):
+    upload_line = f'Positions last uploaded: <b style="color:rgba(255,255,255,0.9);">{meta["uploaded_at"]}</b>'
+else:
+    upload_line = 'No positions file uploaded yet'
 
 st.markdown(f"""
 <div class="mpsif-header">
   <div>
     <p class="mpsif-title">📅 MPSIF Earnings Calendar</p>
-    <p class="mpsif-subtitle">Long-only equity fund · NYU Stern · Live data via Yahoo Finance
-    {file_tag}</p>
+    <p class="mpsif-subtitle">{upload_line}</p>
   </div>
   <div class="mpsif-logo">MPSIF</div>
 </div>
@@ -858,8 +906,6 @@ with st.spinner("Pulling earnings dates and estimates from Yahoo Finance…"):
             "days_until":    days_until(ed),
             "eps_est":       ests["eps_est"],
             "rev_est":       ests["rev_est"],
-            "eps_growth":    ests["eps_growth"],
-            "rev_growth":    ests["rev_growth"],
         })
 
 
@@ -890,7 +936,7 @@ st.markdown("<br>", unsafe_allow_html=True)
 # ─────────────────────────────────────────────
 # TABS
 # ─────────────────────────────────────────────
-tab_list, tab_cal = st.tabs(["  📋  List View  ", "  📅  Calendar View  "])
+tab_cal, tab_list = st.tabs(["  📅  Calendar View  ", "  📋  List View  "])
 
 
 # ── LIST VIEW ────────────────────────────────
