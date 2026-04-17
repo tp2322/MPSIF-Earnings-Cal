@@ -1,7 +1,6 @@
 """
 MPSIF Earnings Calendar
-A Streamlit app for tracking earnings dates across fund holdings.
-Supports Fidelity CSV portfolio export with per-analyst assignment.
+Light-theme redesign with EPS + revenue consensus estimates.
 """
 
 import streamlit as st
@@ -27,170 +26,314 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────
-# CUSTOM CSS
+# CUSTOM CSS — light gray theme
 # ─────────────────────────────────────────────
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
 
-    html, body, [class*="css"] { font-family: 'IBM Plex Sans', sans-serif; }
+/* ── Base ── */
+html, body, [class*="css"] {
+    font-family: 'Inter', sans-serif;
+    color: #1a1a2e;
+}
+.stApp {
+    background-color: #f0f2f6;
+}
 
-    .stApp { background-color: #0d1117; color: #e6edf3; }
+/* ── Sidebar ── */
+section[data-testid="stSidebar"] {
+    background-color: #ffffff;
+    border-right: 1px solid #e2e8f0;
+    box-shadow: 2px 0 8px rgba(0,0,0,0.04);
+}
+section[data-testid="stSidebar"] .stMarkdown p,
+section[data-testid="stSidebar"] label {
+    color: #475569;
+    font-size: 0.85rem;
+}
 
-    section[data-testid="stSidebar"] {
-        background-color: #161b22;
-        border-right: 1px solid #30363d;
-    }
-    section[data-testid="stSidebar"] .stMarkdown h2 {
-        color: #58a6ff;
-        font-family: 'IBM Plex Mono', monospace;
-        font-size: 0.85rem;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        margin-bottom: 0.5rem;
-    }
+/* ── Header ── */
+.mpsif-header {
+    background: linear-gradient(135deg, #1e3a5f 0%, #2d5986 100%);
+    border-radius: 14px;
+    padding: 1.5rem 2rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.mpsif-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+    margin: 0;
+}
+.mpsif-subtitle {
+    font-size: 0.85rem;
+    color: rgba(255,255,255,0.65);
+    margin: 4px 0 0 0;
+}
+.mpsif-logo {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 2rem;
+    font-weight: 600;
+    color: rgba(255,255,255,0.15);
+    letter-spacing: -0.05em;
+}
 
-    .main-header {
-        font-family: 'IBM Plex Mono', monospace;
-        font-size: 1.8rem;
-        font-weight: 600;
-        color: #58a6ff;
-        letter-spacing: -0.02em;
-        margin-bottom: 0;
-    }
-    .main-subheader {
-        font-family: 'IBM Plex Sans', sans-serif;
-        font-size: 0.95rem;
-        color: #8b949e;
-        margin-top: 0.2rem;
-        margin-bottom: 1.5rem;
-    }
+/* ── Metric cards ── */
+.metric-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 1.2rem 1.4rem;
+    text-align: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    transition: box-shadow 0.2s;
+}
+.metric-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.metric-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 2rem;
+    font-weight: 600;
+    color: #1e3a5f;
+    line-height: 1;
+}
+.metric-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 6px;
+}
+.metric-card.accent-green .metric-value { color: #16a34a; }
+.metric-card.accent-amber .metric-value { color: #d97706; }
+.metric-card.accent-red   .metric-value { color: #dc2626; }
 
-    .metric-card {
-        background: #161b22;
-        border: 1px solid #30363d;
-        border-radius: 8px;
-        padding: 1rem 1.25rem;
-        text-align: center;
-    }
-    .metric-value {
-        font-family: 'IBM Plex Mono', monospace;
-        font-size: 1.8rem;
-        font-weight: 600;
-        color: #58a6ff;
-    }
-    .metric-label {
-        font-size: 0.75rem;
-        color: #8b949e;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-    }
+/* ── Table card ── */
+.table-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 0;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    overflow: hidden;
+}
+.table-header-row {
+    background: #f8fafc;
+    border-bottom: 2px solid #e2e8f0;
+    padding: 0.65rem 1rem;
+}
+.col-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+.table-row {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #f1f5f9;
+    transition: background 0.1s;
+}
+.table-row:last-child { border-bottom: none; }
+.table-row:hover { background: #f8fafc; }
 
-    .badge {
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-size: 0.75rem;
-        font-family: 'IBM Plex Mono', monospace;
-        font-weight: 600;
-    }
-    .badge-soon    { background:#1f3a1f; color:#3fb950; border:1px solid #3fb950; }
-    .badge-upcoming{ background:#1f2d3f; color:#58a6ff; border:1px solid #58a6ff; }
-    .badge-past    { background:#1e1e1e; color:#8b949e; border:1px solid #30363d; }
-    .badge-bmc     { background:#2d1f0e; color:#d29922; border:1px solid #d29922; }
+/* ── Ticker chip ── */
+.ticker-chip {
+    display: inline-block;
+    background: #1e3a5f;
+    color: #ffffff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 5px;
+    letter-spacing: 0.03em;
+}
 
-    .cal-cell {
-        background: #161b22;
-        border: 1px solid #30363d;
-        border-radius: 6px;
-        padding: 0.4rem;
-        min-height: 80px;
-        vertical-align: top;
-    }
-    .cal-cell-today   { border-color: #58a6ff; background: #0d2044; }
-    .cal-day-num      { font-family:'IBM Plex Mono',monospace; font-size:0.75rem; color:#8b949e; margin-bottom:4px; }
-    .cal-day-num-today{ color:#58a6ff; font-weight:700; }
-    .cal-event {
-        background: #1f3a1f;
-        color: #3fb950;
-        border-radius: 3px;
-        padding: 1px 4px;
-        font-size: 0.7rem;
-        font-family: 'IBM Plex Mono', monospace;
-        margin-bottom: 2px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 100%;
-    }
-    .cal-event-past { background:#1e1e1e; color:#8b949e; }
+/* ── Company name ── */
+.company-name {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #1e293b;
+}
 
-    .section-header {
-        font-family: 'IBM Plex Mono', monospace;
-        font-size: 0.8rem;
-        color: #8b949e;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-        border-bottom: 1px solid #30363d;
-        padding-bottom: 0.5rem;
-        margin-bottom: 1rem;
-    }
+/* ── Estimate value ── */
+.est-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    color: #334155;
+}
+.est-na {
+    font-size: 0.8rem;
+    color: #cbd5e1;
+}
 
-    .upload-box {
-        background: #161b22;
-        border: 2px dashed #30363d;
-        border-radius: 12px;
-        padding: 2.5rem 2rem;
-        text-align: center;
-        margin: 1.5rem 0;
-    }
-    .upload-box h3 {
-        font-family: 'IBM Plex Mono', monospace;
-        color: #58a6ff;
-        margin-bottom: 0.5rem;
-    }
-    .upload-box p { color: #8b949e; font-size: 0.9rem; }
+/* ── Badges ── */
+.badge {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+.badge-soon     { background:#dcfce7; color:#16a34a; border:1px solid #bbf7d0; }
+.badge-upcoming { background:#dbeafe; color:#1d4ed8; border:1px solid #bfdbfe; }
+.badge-future   { background:#fef9c3; color:#b45309; border:1px solid #fde68a; }
+.badge-past     { background:#f1f5f9; color:#94a3b8; border:1px solid #e2e8f0; }
+.badge-tbd      { background:#f1f5f9; color:#94a3b8; border:1px solid #e2e8f0; }
 
-    .cache-pill {
-        display: inline-block;
-        padding: 3px 10px;
-        border-radius: 20px;
-        font-family: 'IBM Plex Mono', monospace;
-        font-size: 0.72rem;
-        background: #1f2d3f;
-        color: #58a6ff;
-        border: 1px solid #58a6ff;
-        margin-left: 8px;
-    }
-    .cache-pill-warn {
-        background: #2d1f0e;
-        color: #d29922;
-        border-color: #d29922;
-    }
+/* ── Date cell ── */
+.date-text {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    color: #475569;
+}
+.est-marker {
+    font-size: 0.68rem;
+    color: #d97706;
+    margin-left: 3px;
+}
 
-    #MainMenu {visibility:hidden;}
-    footer      {visibility:hidden;}
-    header      {visibility:hidden;}
+/* ── Upload box ── */
+.upload-box {
+    background: #ffffff;
+    border: 2px dashed #cbd5e1;
+    border-radius: 14px;
+    padding: 2.5rem 2rem;
+    text-align: center;
+    margin: 1rem 0 1.5rem 0;
+    transition: border-color 0.2s;
+}
+.upload-box:hover { border-color: #1e3a5f; }
+.upload-box h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #1e3a5f;
+    margin: 0 0 0.4rem 0;
+}
+.upload-box p { color: #64748b; font-size: 0.88rem; margin: 0; }
 
-    .stDataFrame { border:1px solid #30363d; border-radius:8px; overflow:hidden; }
+/* ── Cache pill ── */
+.cache-pill {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    font-weight: 600;
+    background: #dbeafe;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+    margin-left: 6px;
+}
+.cache-pill-warn {
+    background: #fef9c3;
+    color: #b45309;
+    border-color: #fde68a;
+}
 
-    .stButton > button {
-        background: #21262d;
-        color: #e6edf3;
-        border: 1px solid #30363d;
-        border-radius: 6px;
-        font-family: 'IBM Plex Mono', monospace;
-        font-size: 0.8rem;
-    }
-    .stButton > button:hover {
-        background: #30363d;
-        border-color: #58a6ff;
-        color: #58a6ff;
-    }
+/* ── Section label ── */
+.section-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+}
 
-    .stTabs [data-baseweb="tab-list"] { background:transparent; border-bottom:1px solid #30363d; }
-    .stTabs [data-baseweb="tab"]      { font-family:'IBM Plex Mono',monospace; font-size:0.8rem; color:#8b949e; }
-    .stTabs [aria-selected="true"]    { color:#58a6ff !important; border-bottom:2px solid #58a6ff !important; }
+/* ── Calendar ── */
+.cal-cell {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 0.4rem 0.5rem;
+    min-height: 80px;
+}
+.cal-cell-today {
+    border-color: #1e3a5f;
+    background: #eff6ff;
+}
+.cal-day-num       { font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:#94a3b8; margin-bottom:4px; }
+.cal-day-num-today { color:#1e3a5f; font-weight:700; }
+.cal-event {
+    background: #dbeafe;
+    color: #1d4ed8;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 0.68rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.cal-event-past { background:#f1f5f9; color:#94a3b8; }
+
+/* ── Streamlit overrides ── */
+#MainMenu { visibility: hidden; }
+footer    { visibility: hidden; }
+header    { visibility: hidden; }
+
+.stTabs [data-baseweb="tab-list"] {
+    background: transparent;
+    border-bottom: 2px solid #e2e8f0;
+    gap: 0.5rem;
+}
+.stTabs [data-baseweb="tab"] {
+    font-family: 'Inter', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #64748b;
+    padding: 0.5rem 1rem;
+}
+.stTabs [aria-selected="true"] {
+    color: #1e3a5f !important;
+    border-bottom: 2px solid #1e3a5f !important;
+    font-weight: 600 !important;
+}
+
+div[data-testid="stSelectbox"] > div > div {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 0.85rem;
+}
+
+.stButton > button {
+    background: #ffffff;
+    color: #334155;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 500;
+    padding: 0.4rem 0.9rem;
+    transition: all 0.15s;
+}
+.stButton > button:hover {
+    background: #f8fafc;
+    border-color: #1e3a5f;
+    color: #1e3a5f;
+}
+
+.stCheckbox label { font-size: 0.85rem; color: #475569; }
+
+div[data-testid="stExpander"] {
+    background: #ffffff;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 10px !important;
+    margin-bottom: 0.5rem;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -207,10 +350,9 @@ ANALYSTS = [
 HOLDINGS_FILE       = "mpsif_holdings.json"
 ANALYST_EMAILS_FILE = "mpsif_analyst_emails.json"
 UPLOAD_META_FILE    = "mpsif_upload_meta.json"
+GITHUB_URL          = "https://github.com/tp2322/MPSIF-Earnings-Calendar"
 
 DEFAULT_ANALYST_EMAILS = {a: f"{a.lower()}@stern.nyu.edu" for a in ANALYSTS if a != "Unassigned"}
-
-# Symbols to skip in Fidelity exports (money market, cash, etc.)
 SKIP_SYMBOLS = {"SPAXX**", "SPAXX", "FDRXX", "FZFXX", "FCASH"}
 
 
@@ -223,9 +365,9 @@ def load_holdings():
             return json.load(f)
     return []
 
-def save_holdings(holdings):
+def save_holdings(h):
     with open(HOLDINGS_FILE, "w") as f:
-        json.dump(holdings, f, indent=2)
+        json.dump(h, f, indent=2)
 
 def load_analyst_emails():
     if os.path.exists(ANALYST_EMAILS_FILE):
@@ -233,9 +375,9 @@ def load_analyst_emails():
             return json.load(f)
     return DEFAULT_ANALYST_EMAILS.copy()
 
-def save_analyst_emails(emails):
+def save_analyst_emails(e):
     with open(ANALYST_EMAILS_FILE, "w") as f:
-        json.dump(emails, f, indent=2)
+        json.dump(e, f, indent=2)
 
 def load_upload_meta():
     if os.path.exists(UPLOAD_META_FILE):
@@ -243,92 +385,66 @@ def load_upload_meta():
             return json.load(f)
     return {}
 
-def save_upload_meta(meta):
+def save_upload_meta(m):
     with open(UPLOAD_META_FILE, "w") as f:
-        json.dump(meta, f, indent=2)
+        json.dump(m, f, indent=2)
 
 
 # ─────────────────────────────────────────────
 # FIDELITY CSV PARSER
 # ─────────────────────────────────────────────
 def parse_fidelity_csv(file_bytes: bytes) -> pd.DataFrame:
-    """
-    Parse a Fidelity portfolio CSV export.
-    Stops at the blank line that precedes the footer disclaimers.
-    Returns cleaned DataFrame with equity positions only.
-    """
-    text = file_bytes.decode("utf-8-sig")   # strips BOM
-
+    text = file_bytes.decode("utf-8-sig")
     data_lines = []
     for line in text.splitlines():
-        stripped = line.strip()
-        if not stripped:
-            break           # blank line = start of footer
-        if stripped.startswith('"'):
-            break           # quoted disclaimer
+        s = line.strip()
+        if not s or s.startswith('"'):
+            break
         data_lines.append(line)
-
     if not data_lines:
-        raise ValueError("Could not find data rows in the uploaded CSV.")
+        raise ValueError("No data rows found.")
 
-    # index_col=False is critical: prevents pandas from treating the repeated
-    # Account Number column as a row index, which shifts all columns left by one.
     df = pd.read_csv(io.StringIO("\n".join(data_lines)), index_col=False)
-
-    # Normalise column names — strip whitespace and any BOM remnants
     df.columns = [c.strip().lstrip("\ufeff").strip() for c in df.columns]
 
-    # Cast Symbol and Description to str early so .str accessor always works
     df["Symbol"]      = df["Symbol"].fillna("").astype(str).str.strip()
     df["Description"] = df["Description"].fillna("").astype(str).str.strip()
 
-    # Drop non-equity rows (money market, pending activity, blank symbols)
     df = df[df["Symbol"] != ""]
     df = df[~df["Symbol"].isin(SKIP_SYMBOLS)]
     df = df[~df["Description"].str.lower().str.contains("pending|money market", na=False)]
 
-    # Sanitise numeric columns — strip $, +, commas, % before casting
     for col in ["Last Price", "Current Value", "Percent Of Account", "Quantity"]:
         if col in df.columns:
             df[col] = (
                 df[col].fillna("").astype(str)
-                .str.replace(r"[$+,%]", "", regex=True)
-                .str.strip()
+                .str.replace(r"[$+,%]", "", regex=True).str.strip()
                 .replace("", float("nan"))
             )
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # Title-case company names now that Description is guaranteed a str column
     df["Description"] = df["Description"].str.title()
-
-    keep = ["Symbol", "Description", "Quantity", "Last Price",
-            "Current Value", "Percent Of Account"]
-    # Only keep columns that actually exist (future-proof against export format changes)
-    keep = [c for c in keep if c in df.columns]
+    keep = [c for c in ["Symbol", "Description", "Quantity", "Last Price",
+                         "Current Value", "Percent Of Account"] if c in df.columns]
     return df[keep].reset_index(drop=True)
 
 
 # ─────────────────────────────────────────────
-# YAHOO FINANCE HELPERS
+# YAHOO FINANCE — EARNINGS DATE
 # ─────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_earnings_date(ticker: str):
-    """
-    Try four yfinance methods in order of reliability.
-    Returns (date | None, call_time_str, is_estimate_bool).
-    """
     try:
         tk = yf.Ticker(ticker)
         today_naive = date.today()
         today_ts    = pd.Timestamp.today(tz="UTC")
 
-        # ── Method 1: calendar dict (most reliable for next event) ──
+        # Method 1: calendar dict
         try:
             cal = tk.calendar
             if isinstance(cal, dict):
                 raw = cal.get("Earnings Date")
                 if raw:
-                    # can be a list of timestamps or a single value
                     if not isinstance(raw, (list, tuple)):
                         raw = [raw]
                     for val in raw:
@@ -341,7 +457,7 @@ def fetch_earnings_date(ticker: str):
         except Exception:
             pass
 
-        # ── Method 2: earnings_dates DataFrame ──
+        # Method 2: earnings_dates DataFrame
         try:
             edf = tk.earnings_dates
             if edf is not None and not edf.empty:
@@ -362,7 +478,7 @@ def fetch_earnings_date(ticker: str):
         except Exception:
             pass
 
-        # ── Method 3: info dict timestamp fields ──
+        # Method 3: info dict
         try:
             info = tk.info or {}
             for key in ("earningsDate", "earningsTimestamp", "earningsTimestampStart"):
@@ -381,9 +497,9 @@ def fetch_earnings_date(ticker: str):
         except Exception:
             pass
 
-        # ── Method 4: fast_info (newer yfinance versions) ──
+        # Method 4: fast_info
         try:
-            fi = tk.fast_info
+            fi  = tk.fast_info
             raw = getattr(fi, "earnings_date", None) or getattr(fi, "earningsDate", None)
             if raw:
                 d = pd.Timestamp(raw).date()
@@ -394,45 +510,110 @@ def fetch_earnings_date(ticker: str):
 
     except Exception:
         pass
-
     return None, "", True
 
 
+# ─────────────────────────────────────────────
+# YAHOO FINANCE — CONSENSUS ESTIMATES
+# ─────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
-def fetch_stock_info(ticker: str):
+def fetch_estimates(ticker: str) -> dict:
+    """
+    Returns dict with keys:
+      eps_est      – forward EPS estimate (float or None)
+      rev_est      – forward revenue estimate (float or None)
+      eps_growth   – YoY EPS growth estimate % (float or None)
+      rev_growth   – YoY revenue growth estimate % (float or None)
+    """
+    out = {"eps_est": None, "rev_est": None, "eps_growth": None, "rev_growth": None}
     try:
-        info = yf.Ticker(ticker).info
-        return {
-            "sector":     info.get("sector", "—"),
-            "market_cap": info.get("marketCap"),
-            "name":       info.get("shortName", ticker),
-        }
+        tk   = yf.Ticker(ticker)
+        info = tk.info or {}
+
+        # EPS forward estimate
+        eps = info.get("forwardEps") or info.get("epsForward")
+        if eps is not None:
+            out["eps_est"] = float(eps)
+
+        # Revenue estimate — try analyst estimates first, fall back to info
+        try:
+            ae = tk.analyst_price_targets  # newer yfinance
+        except Exception:
+            ae = None
+
+        # Revenue from earnings_estimate if available
+        try:
+            rev_raw = None
+            # earningsEstimate / revenueEstimate from get_earnings_forecast
+            fc = tk.get_earnings_forecast() if hasattr(tk, "get_earnings_forecast") else None
+            if fc is not None and not fc.empty:
+                rev_raw = fc.get("revenueEstimate", {}).get("avg")
+            if rev_raw is None:
+                rev_raw = info.get("revenueEstimateAvg") or info.get("totalRevenue")
+            if rev_raw:
+                out["rev_est"] = float(rev_raw)
+        except Exception:
+            pass
+
+        # Growth rates
+        eps_g = info.get("earningsGrowth") or info.get("earningsQuarterlyGrowth")
+        if eps_g is not None:
+            out["eps_growth"] = float(eps_g) * 100
+
+        rev_g = info.get("revenueGrowth")
+        if rev_g is not None:
+            out["rev_growth"] = float(rev_g) * 100
+
+        # Better revenue estimate from analyst_price_targets or earnings_estimate
+        try:
+            ee = tk.earnings_estimate
+            if ee is not None and not ee.empty and "0q" in ee.index:
+                rev_col = next((c for c in ee.columns if "revenue" in c.lower()), None)
+                if rev_col:
+                    out["rev_est"] = float(ee.loc["0q", rev_col])
+        except Exception:
+            pass
+
     except Exception:
-        return {"sector": "—", "market_cap": None, "name": ticker}
-
-
-def days_until(d):
-    return (d - date.today()).days if d else None
-
-def fmt_market_cap(mc):
-    if mc is None: return "—"
-    if mc >= 1e12: return f"${mc/1e12:.1f}T"
-    if mc >= 1e9:  return f"${mc/1e9:.1f}B"
-    return f"${mc/1e6:.0f}M"
-
-def earnings_badge(d):
-    if d is None:
-        return '<span class="badge badge-past">TBD</span>'
-    n = days_until(d)
-    if n is None:  return '<span class="badge badge-past">TBD</span>'
-    if n < 0:      return f'<span class="badge badge-past">{d.strftime("%b %d")}</span>'
-    if n <= 7:     return f'<span class="badge badge-soon">in {n}d</span>'
-    if n <= 30:    return f'<span class="badge badge-upcoming">in {n}d</span>'
-    return f'<span class="badge badge-bmc">{d.strftime("%b %d")}</span>'
+        pass
+    return out
 
 
 # ─────────────────────────────────────────────
-# EMAIL HELPER
+# FORMATTING HELPERS
+# ─────────────────────────────────────────────
+def days_until(d):
+    return (d - date.today()).days if d else None
+
+def fmt_eps(v):
+    if v is None: return None
+    return f"${v:.2f}"
+
+def fmt_revenue(v):
+    if v is None: return None
+    if v >= 1e9:  return f"${v/1e9:.1f}B"
+    if v >= 1e6:  return f"${v/1e6:.0f}M"
+    return f"${v:,.0f}"
+
+def fmt_growth(v):
+    if v is None: return None
+    sign = "+" if v >= 0 else ""
+    return f"{sign}{v:.1f}%"
+
+def earnings_badge(d):
+    if d is None:
+        return '<span class="badge badge-tbd">TBD</span>'
+    n = days_until(d)
+    if n is None:      return '<span class="badge badge-tbd">TBD</span>'
+    if n < 0:          return f'<span class="badge badge-past">{d.strftime("%b %d")}</span>'
+    if n == 0:         return '<span class="badge badge-soon">TODAY</span>'
+    if n <= 7:         return f'<span class="badge badge-soon">in {n}d</span>'
+    if n <= 30:        return f'<span class="badge badge-upcoming">in {n}d</span>'
+    return f'<span class="badge badge-future">{d.strftime("%b %d")}</span>'
+
+
+# ─────────────────────────────────────────────
+# EMAIL
 # ─────────────────────────────────────────────
 def send_earnings_reminder(smtp_host, smtp_port, smtp_user, smtp_pass,
                            to_email, analyst_name, holdings_rows):
@@ -445,29 +626,25 @@ def send_earnings_reminder(smtp_host, smtp_port, smtp_user, smtp_pass,
     for row in holdings_rows:
         d = row["earnings_date"]
         n = days_until(d) if d else None
-        days_str = (
-            f"in {n} day{'s' if n != 1 else ''}"
-            if (n is not None and n >= 0)
-            else (d.strftime("%b %d") if d else "TBD")
-        )
+        days_str = (f"in {n} day{'s' if n != 1 else ''}"
+                    if (n is not None and n >= 0)
+                    else (d.strftime("%b %d") if d else "TBD"))
         rows_html += f"""
         <tr>
           <td style="padding:8px 12px;font-family:monospace;font-weight:600;">{row['ticker']}</td>
           <td style="padding:8px 12px;">{row['company']}</td>
           <td style="padding:8px 12px;font-family:monospace;">{d.strftime('%B %d, %Y') if d else 'TBD'}</td>
-          <td style="padding:8px 12px;color:#3fb950;font-family:monospace;">{days_str}</td>
+          <td style="padding:8px 12px;color:#16a34a;font-family:monospace;">{days_str}</td>
         </tr>"""
 
-    html = f"""<html><body style="background:#0d1117;color:#e6edf3;
-        font-family:'IBM Plex Sans',sans-serif;padding:24px;">
-      <h2 style="color:#58a6ff;font-family:monospace;">MPSIF — Earnings Reminder</h2>
-      <p>Hi {analyst_name},</p>
-      <p>Here are the upcoming earnings dates for your holdings:</p>
-      <table style="border-collapse:collapse;width:100%;background:#161b22;
-          border:1px solid #30363d;border-radius:8px;">
+    html = f"""<html><body style="background:#f0f2f6;color:#1a1a2e;
+        font-family:'Inter',sans-serif;padding:24px;">
+      <h2 style="color:#1e3a5f;">MPSIF — Earnings Reminder</h2>
+      <p>Hi {analyst_name}, here are upcoming earnings for your holdings:</p>
+      <table style="border-collapse:collapse;width:100%;background:#fff;
+          border:1px solid #e2e8f0;border-radius:8px;">
         <thead>
-          <tr style="background:#21262d;color:#8b949e;font-size:0.8rem;
-              text-transform:uppercase;letter-spacing:0.08em;">
+          <tr style="background:#f8fafc;color:#94a3b8;font-size:0.75rem;text-transform:uppercase;">
             <th style="padding:8px 12px;text-align:left;">Ticker</th>
             <th style="padding:8px 12px;text-align:left;">Company</th>
             <th style="padding:8px 12px;text-align:left;">Earnings Date</th>
@@ -476,19 +653,18 @@ def send_earnings_reminder(smtp_host, smtp_port, smtp_user, smtp_pass,
         </thead>
         <tbody>{rows_html}</tbody>
       </table>
-      <p style="color:#8b949e;font-size:0.85rem;margin-top:24px;">
-        — MPSIF Earnings Calendar</p>
+      <p style="color:#94a3b8;font-size:0.82rem;margin-top:20px;">— MPSIF Earnings Calendar</p>
     </body></html>"""
 
     msg.attach(MIMEText(html, "html"))
-    with smtplib.SMTP(smtp_host, int(smtp_port)) as server:
-        server.starttls()
-        server.login(smtp_user, smtp_pass)
-        server.sendmail(smtp_user, to_email, msg.as_string())
+    with smtplib.SMTP(smtp_host, int(smtp_port)) as s:
+        s.starttls()
+        s.login(smtp_user, smtp_pass)
+        s.sendmail(smtp_user, to_email, msg.as_string())
 
 
 # ─────────────────────────────────────────────
-# SESSION STATE INIT
+# SESSION STATE
 # ─────────────────────────────────────────────
 if "holdings"       not in st.session_state:
     st.session_state.holdings       = load_holdings()
@@ -501,33 +677,35 @@ if "show_upload"    not in st.session_state:
 
 
 # ─────────────────────────────────────────────
-# HEADER
+# HEADER BANNER
 # ─────────────────────────────────────────────
-st.markdown('<h1 class="main-header">MPSIF Earnings Calendar</h1>', unsafe_allow_html=True)
-
 meta = st.session_state.upload_meta
+file_tag = ""
 if meta.get("filename"):
-    st.markdown(
-        f'<p class="main-subheader">Long-only equity fund · NYU Stern · '
-        f'Positions from <span class="cache-pill">{meta["filename"]}</span> '
-        f'<span class="cache-pill cache-pill-warn">uploaded {meta.get("uploaded_at","")}</span></p>',
-        unsafe_allow_html=True,
+    file_tag = (
+        f'<span class="cache-pill">{meta["filename"]}</span>'
+        f'<span class="cache-pill-warn">{meta.get("uploaded_at","")}</span>'
     )
-else:
-    st.markdown(
-        '<p class="main-subheader">Long-only equity fund · NYU Stern · '
-        'Upload a Fidelity positions CSV to get started</p>',
-        unsafe_allow_html=True,
-    )
+
+st.markdown(f"""
+<div class="mpsif-header">
+  <div>
+    <p class="mpsif-title">📅 MPSIF Earnings Calendar</p>
+    <p class="mpsif-subtitle">Long-only equity fund · NYU Stern · Live data via Yahoo Finance
+    {file_tag}</p>
+  </div>
+  <div class="mpsif-logo">MPSIF</div>
+</div>
+""", unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
-# UPLOAD / IMPORT FLOW
+# UPLOAD FLOW
 # ─────────────────────────────────────────────
 has_holdings = len(st.session_state.holdings) > 0
 
 if has_holdings:
-    col_toggle, _ = st.columns([2.5, 6])
+    col_toggle, _ = st.columns([2.2, 6])
     with col_toggle:
         btn_label = "✕ Cancel" if st.session_state.show_upload else "📂 Upload new positions file"
         if st.button(btn_label, key="toggle_upload"):
@@ -538,21 +716,18 @@ if st.session_state.show_upload:
     st.markdown("""
     <div class="upload-box">
       <h3>📂 Upload Positions File</h3>
-      <p>Export your portfolio from Fidelity as a CSV and drop it here.<br>
-      Go to <b>Accounts → Positions → Download (↓)</b> and choose <b>CSV</b> format.</p>
+      <p>Export your portfolio from Fidelity → <b>Accounts → Positions → Download (↓) → CSV</b></p>
     </div>
     """, unsafe_allow_html=True)
 
     uploaded = st.file_uploader(
-        "Drop your Fidelity CSV here",
-        type=["csv"],
-        label_visibility="collapsed",
-        key="csv_uploader",
+        "Drop CSV here", type=["csv"],
+        label_visibility="collapsed", key="csv_uploader",
     )
 
     if uploaded is not None:
         try:
-            parsed_df = parse_fidelity_csv(uploaded.read())
+            parsed_df    = parse_fidelity_csv(uploaded.read())
             new_holdings = [
                 {"ticker": row["Symbol"], "company": row["Description"]}
                 for _, row in parsed_df.iterrows()
@@ -573,12 +748,8 @@ if st.session_state.show_upload:
 
     st.divider()
 
-
-# ─────────────────────────────────────────────
-# GUARD: nothing loaded yet
-# ─────────────────────────────────────────────
 if not st.session_state.holdings:
-    st.info("No positions loaded yet. Upload a Fidelity CSV above to get started.")
+    st.info("No positions loaded. Upload a Fidelity CSV above to get started.")
     st.stop()
 
 
@@ -586,114 +757,109 @@ if not st.session_state.holdings:
 # SIDEBAR
 # ─────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## 🏦 MPSIF")
+    st.markdown("### 🏦 MPSIF")
+    st.markdown("---")
 
     show_past = st.checkbox("Show past earnings", value=False)
 
     tickers_all = [h["ticker"] for h in st.session_state.holdings]
 
-    st.markdown('<div class="section-header" style="margin-top:1.5rem;">Manual Edits</div>', unsafe_allow_html=True)
+    st.markdown("**Manual Edits**")
 
-    with st.expander("➕ Add Position Manually"):
+    with st.expander("➕ Add Position"):
         new_ticker  = st.text_input("Ticker", key="new_ticker").upper().strip()
         new_company = st.text_input("Company Name", key="new_company")
         if st.button("Add"):
             if new_ticker:
                 if new_ticker in tickers_all:
-                    st.error("Ticker already exists.")
+                    st.error("Already exists.")
                 else:
-                    st.session_state.holdings.append({
-                        "ticker": new_ticker, "company": new_company or new_ticker,
-                    })
+                    st.session_state.holdings.append({"ticker": new_ticker, "company": new_company or new_ticker})
                     save_holdings(st.session_state.holdings)
-                    st.success(f"Added {new_ticker}")
                     st.rerun()
 
     with st.expander("🗑️ Remove Position"):
-        remove_ticker = st.selectbox("Select ticker", tickers_all, key="remove_ticker")
+        rm = st.selectbox("Ticker", tickers_all, key="remove_ticker")
         if st.button("Remove"):
-            st.session_state.holdings = [h for h in st.session_state.holdings if h["ticker"] != remove_ticker]
+            st.session_state.holdings = [h for h in st.session_state.holdings if h["ticker"] != rm]
             save_holdings(st.session_state.holdings)
-            st.success(f"Removed {remove_ticker}")
             st.rerun()
 
     with st.expander("⚠️ Clear All Data"):
-        st.caption("Wipes cached holdings and forces a fresh CSV upload.")
+        st.caption("Wipes cache and forces fresh upload.")
         if st.button("Clear & Re-upload", type="primary"):
             st.session_state.holdings    = []
             st.session_state.upload_meta = {}
             st.session_state.show_upload = True
             for f in [HOLDINGS_FILE, UPLOAD_META_FILE]:
-                if os.path.exists(f):
-                    os.remove(f)
+                if os.path.exists(f): os.remove(f)
             st.rerun()
 
-    st.markdown('<div class="section-header" style="margin-top:1.5rem;">Email Reminders</div>', unsafe_allow_html=True)
+    st.markdown("---")
+    st.markdown("**📧 Email Reminders**")
 
-    with st.expander("📧 SMTP Settings"):
-        smtp_host = st.text_input("SMTP Host", value="smtp.gmail.com", key="smtp_host")
-        smtp_port = st.text_input("SMTP Port", value="587", key="smtp_port")
+    with st.expander("SMTP Settings"):
+        smtp_host = st.text_input("Host", value="smtp.gmail.com", key="smtp_host")
+        smtp_port = st.text_input("Port", value="587", key="smtp_port")
         smtp_user = st.text_input("From Email", key="smtp_user")
         smtp_pass = st.text_input("App Password", type="password", key="smtp_pass")
 
-    with st.expander("📬 Member Emails"):
+    with st.expander("Member Emails"):
         updated_emails = {}
         for a in [x for x in ANALYSTS if x != "Unassigned"]:
-            updated_emails[a] = st.text_input(
-                a, value=st.session_state.analyst_emails.get(a, ""), key=f"email_{a}"
-            )
+            updated_emails[a] = st.text_input(a, value=st.session_state.analyst_emails.get(a, ""), key=f"email_{a}")
         if st.button("Save Emails"):
             st.session_state.analyst_emails = updated_emails
             save_analyst_emails(updated_emails)
             st.success("Saved.")
 
-    with st.expander("📨 Send Reminders"):
+    with st.expander("Send Reminders"):
         send_to     = st.multiselect("Send to", [a for a in ANALYSTS if a != "Unassigned"],
                                      default=[a for a in ANALYSTS if a != "Unassigned"], key="send_to")
-        days_filter = st.slider("Holdings with earnings within X days", 1, 90, 30)
-        if st.button("Send Reminder Emails"):
+        days_filter = st.slider("Earnings within X days", 1, 90, 30)
+        if st.button("Send"):
             if not smtp_user or not smtp_pass:
-                st.error("Please fill in SMTP settings above.")
+                st.error("Fill in SMTP settings first.")
             else:
                 sent = failed = 0
                 for analyst in send_to:
                     email = st.session_state.analyst_emails.get(analyst, "")
-                    if not email:
-                        continue
+                    if not email: continue
                     email_rows = []
                     for h in st.session_state.holdings:
                         ed, _, _ = fetch_earnings_date(h["ticker"])
                         n = days_until(ed)
                         if n is not None and 0 <= n <= days_filter:
                             email_rows.append({**h, "earnings_date": ed})
-                    if not email_rows:
-                        continue
+                    if not email_rows: continue
                     try:
-                        send_earnings_reminder(
-                            smtp_host, smtp_port, smtp_user, smtp_pass,
-                            email, analyst, email_rows,
-                        )
+                        send_earnings_reminder(smtp_host, smtp_port, smtp_user, smtp_pass,
+                                               email, analyst, email_rows)
                         sent += 1
                     except Exception as e:
                         failed += 1
-                        st.error(f"Failed for {analyst}: {e}")
-                st.success(f"Sent {sent} emails. {failed} failed.")
+                        st.error(f"{analyst}: {e}")
+                st.success(f"Sent {sent}, failed {failed}.")
 
 
 # ─────────────────────────────────────────────
-# BUILD ENRICHED TABLE
+# FETCH DATA
 # ─────────────────────────────────────────────
-with st.spinner("Fetching earnings dates from Yahoo Finance…"):
+with st.spinner("Pulling earnings dates and estimates from Yahoo Finance…"):
     rows = []
     for h in st.session_state.holdings:
         ed, call_time, is_est = fetch_earnings_date(h["ticker"])
+        ests                  = fetch_estimates(h["ticker"])
         rows.append({
             "ticker":        h["ticker"],
             "company":       h.get("company") or h["ticker"],
             "earnings_date": ed,
-            "call_time":     call_time,
             "is_estimate":   is_est,
             "days_until":    days_until(ed),
+            "eps_est":       ests["eps_est"],
+            "rev_est":       ests["rev_est"],
+            "eps_growth":    ests["eps_growth"],
+            "rev_growth":    ests["rev_growth"],
         })
 
 
@@ -706,14 +872,14 @@ this_month = [r for r in rows if r["days_until"] is not None and 0 <= r["days_un
 no_date    = [r for r in rows if r["earnings_date"] is None]
 
 c1, c2, c3, c4 = st.columns(4)
-for col, val, label in [
-    (c1, len(rows),       "Total Holdings"),
-    (c2, len(this_week),  "Earnings This Week"),
-    (c3, len(this_month), "Earnings This Month"),
-    (c4, len(no_date),    "Date TBD"),
+for col, val, label, accent in [
+    (c1, len(rows),       "Total Holdings",        ""),
+    (c2, len(this_week),  "Earnings This Week",     "accent-green"),
+    (c3, len(this_month), "Earnings This Month",    "accent-amber"),
+    (c4, len(no_date),    "Date TBD",               ""),
 ]:
     col.markdown(f"""
-    <div class="metric-card">
+    <div class="metric-card {accent}">
       <div class="metric-value">{val}</div>
       <div class="metric-label">{label}</div>
     </div>""", unsafe_allow_html=True)
@@ -724,76 +890,76 @@ st.markdown("<br>", unsafe_allow_html=True)
 # ─────────────────────────────────────────────
 # TABS
 # ─────────────────────────────────────────────
-tab_list, tab_cal = st.tabs(["📋  List View", "📅  Calendar View"])
+tab_list, tab_cal = st.tabs(["  📋  List View  ", "  📅  Calendar View  "])
 
 
 # ── LIST VIEW ────────────────────────────────
 with tab_list:
-    sort_col, _ = st.columns([2, 6])
+    sort_col, _ = st.columns([2.5, 6])
     with sort_col:
         sort_by = st.selectbox(
-            "Sort by",
-            ["Earnings Date (soonest)", "Ticker A→Z"],
-            label_visibility="collapsed",
-            key="sort_by",
+            "Sort", ["Earnings Date (soonest)", "Ticker A→Z"],
+            label_visibility="collapsed", key="sort_by",
         )
 
-    sort_map = {
-        "Earnings Date (soonest)": "days_until",
-        "Ticker A→Z":              "ticker",
-    }
-    sort_key = sort_map[sort_by]
-
     display_rows = [r for r in rows if show_past or r["days_until"] is None or r["days_until"] >= 0]
-    display_rows = sorted(
-        display_rows,
-        key=lambda r: (r[sort_key] is None, r[sort_key])
-        if sort_key != "days_until"
-        else (r["days_until"] is None, r["days_until"] if r["days_until"] is not None else 9999),
-    )
+    if sort_by == "Ticker A→Z":
+        display_rows = sorted(display_rows, key=lambda r: r["ticker"])
+    else:
+        display_rows = sorted(display_rows,
+            key=lambda r: (r["days_until"] is None, r["days_until"] if r["days_until"] is not None else 9999))
 
     if not display_rows:
-        st.info("No holdings match current filters.")
+        st.info("No holdings to display.")
     else:
-        hcols = st.columns([1.5, 5, 2.5, 2])
-        for col, hdr in zip(hcols, ["TICKER", "COMPANY", "EARNINGS DATE", "WHEN"]):
-            col.markdown(
-                f'<div class="section-header" style="margin-bottom:0.25rem;">{hdr}</div>',
-                unsafe_allow_html=True,
-            )
-        st.markdown('<hr style="border:none;border-top:1px solid #30363d;margin:0 0 0.5rem 0;">', unsafe_allow_html=True)
+        # ── Header row ──
+        st.markdown('<div class="table-card">', unsafe_allow_html=True)
+        hcols = st.columns([1.4, 3.8, 2, 1.6, 1.6, 1.8])
+        header_labels = ["TICKER", "COMPANY", "EARNINGS DATE", "EPS EST", "REV EST", "WHEN"]
+        st.markdown('<div class="table-header-row">', unsafe_allow_html=True)
+        for col, lbl in zip(hcols, header_labels):
+            col.markdown(f'<div class="col-label">{lbl}</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
+        # ── Data rows ──
         for r in display_rows:
-            rcols = st.columns([1.5, 5, 2.5, 2])
-            rcols[0].markdown(f"**`{r['ticker']}`**")
-            rcols[1].markdown(r["company"])
-            ed      = r["earnings_date"]
-            est_tag = ' <small style="color:#d29922">~est</small>' if r["is_estimate"] and ed else ""
-            rcols[2].markdown(
-                f"{ed.strftime('%b %d, %Y') if ed else '—'}{est_tag}",
-                unsafe_allow_html=True,
-            )
-            rcols[3].markdown(earnings_badge(ed), unsafe_allow_html=True)
-            st.markdown('<hr style="border:none;border-top:1px solid #21262d;margin:0.25rem 0;">', unsafe_allow_html=True)
+            ed       = r["earnings_date"]
+            est_tag  = '<span class="est-marker">~est</span>' if r["is_estimate"] and ed else ""
+            date_str = f"{ed.strftime('%b %d, %Y')}{est_tag}" if ed else "—"
+
+            eps_str  = fmt_eps(r["eps_est"])
+            rev_str  = fmt_revenue(r["rev_est"])
+            eps_html = f'<span class="est-value">{eps_str}</span>' if eps_str else '<span class="est-na">—</span>'
+            rev_html = f'<span class="est-value">{rev_str}</span>' if rev_str else '<span class="est-na">—</span>'
+
+            rcols = st.columns([1.4, 3.8, 2, 1.6, 1.6, 1.8])
+            rcols[0].markdown(f'<span class="ticker-chip">{r["ticker"]}</span>', unsafe_allow_html=True)
+            rcols[1].markdown(f'<span class="company-name">{r["company"]}</span>', unsafe_allow_html=True)
+            rcols[2].markdown(f'<span class="date-text">{date_str}</span>', unsafe_allow_html=True)
+            rcols[3].markdown(eps_html, unsafe_allow_html=True)
+            rcols[4].markdown(rev_html, unsafe_allow_html=True)
+            rcols[5].markdown(earnings_badge(ed), unsafe_allow_html=True)
+            st.markdown('<hr style="border:none;border-top:1px solid #f1f5f9;margin:0.1rem 0;">', unsafe_allow_html=True)
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style="margin-top:0.75rem;font-size:0.72rem;color:#94a3b8;">
+      <b>~est</b> = date is estimated · <b>EPS Est</b> = forward consensus EPS ·
+      <b>Rev Est</b> = forward consensus revenue · Data via Yahoo Finance, refreshed hourly
+    </div>""", unsafe_allow_html=True)
 
 
 # ── CALENDAR VIEW ────────────────────────────
 with tab_cal:
-    cal_col1, cal_col2, _ = st.columns([1.5, 1.5, 5])
-    with cal_col1:
-        cal_month = st.selectbox(
-            "Month", range(1, 13),
-            index=today.month - 1,
-            format_func=lambda m: calendar.month_name[m],
-            label_visibility="collapsed",
-            key="cal_month",
-        )
-    with cal_col2:
-        cal_year = st.selectbox(
-            "Year", range(today.year, today.year + 2),
-            label_visibility="collapsed",
-            key="cal_year",
-        )
+    cal_c1, cal_c2, _ = st.columns([1.5, 1.5, 5])
+    with cal_c1:
+        cal_month = st.selectbox("Month", range(1, 13), index=today.month - 1,
+                                 format_func=lambda m: calendar.month_name[m],
+                                 label_visibility="collapsed", key="cal_month")
+    with cal_c2:
+        cal_year = st.selectbox("Year", range(today.year, today.year + 2),
+                                label_visibility="collapsed", key="cal_year")
 
     event_map: dict = {}
     for r in rows:
@@ -807,82 +973,69 @@ with tab_cal:
     hcols = st.columns(7)
     for col, dn in zip(hcols, day_names):
         col.markdown(
-            f'<div style="text-align:center;font-family:\'IBM Plex Mono\',monospace;'
-            f'font-size:0.75rem;color:#8b949e;padding-bottom:4px;">{dn}</div>',
-            unsafe_allow_html=True,
-        )
+            f'<div style="text-align:center;font-size:0.72rem;font-weight:600;'
+            f'color:#94a3b8;padding-bottom:6px;letter-spacing:0.05em;">{dn}</div>',
+            unsafe_allow_html=True)
 
     for week in cal_matrix:
         wcols = st.columns(7)
         for col, day in zip(wcols, week):
             if day == 0:
-                col.markdown(
-                    '<div class="cal-cell" style="background:transparent;border-color:transparent;"></div>',
-                    unsafe_allow_html=True,
-                )
+                col.markdown('<div style="min-height:80px;"></div>', unsafe_allow_html=True)
                 continue
             this_date  = date(cal_year, cal_month, day)
             is_today   = this_date == today
             cell_class = "cal-cell-today" if is_today else "cal-cell"
             day_class  = "cal-day-num-today" if is_today else "cal-day-num"
             events_html = "".join(
-                f'<div class="cal-event{" cal-event-past" if this_date < today else ""}" '
-                f'title="{t}">{t}</div>'
+                f'<div class="cal-event{" cal-event-past" if this_date < today else ""}">{t}</div>'
                 for t in event_map.get(this_date, [])
             )
             col.markdown(
                 f'<div class="{cell_class}"><div class="{day_class}">{day}</div>{events_html}</div>',
-                unsafe_allow_html=True,
-            )
+                unsafe_allow_html=True)
 
     st.markdown("""
-    <div style="margin-top:1rem;display:flex;gap:1rem;align-items:center;">
-      <span style="font-size:0.75rem;color:#8b949e;">Legend:</span>
-      <span class="cal-event" style="position:static;">TICKER — future</span>
-      <span class="cal-event cal-event-past" style="position:static;">TICKER — past</span>
-      <div style="width:12px;height:12px;border:1px solid #58a6ff;background:#0d2044;
-          border-radius:2px;display:inline-block;"></div>
-      <span style="font-size:0.75rem;color:#8b949e;">Today</span>
+    <div style="margin-top:1rem;display:flex;gap:1.2rem;align-items:center;flex-wrap:wrap;">
+      <span style="font-size:0.72rem;color:#94a3b8;font-weight:600;">LEGEND</span>
+      <span class="cal-event" style="position:static;">Upcoming</span>
+      <span class="cal-event cal-event-past" style="position:static;">Past</span>
+      <div style="display:flex;align-items:center;gap:4px;">
+        <div style="width:12px;height:12px;border:2px solid #1e3a5f;background:#eff6ff;border-radius:2px;"></div>
+        <span style="font-size:0.72rem;color:#94a3b8;">Today</span>
+      </div>
     </div>""", unsafe_allow_html=True)
 
     if event_map:
         st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown('<div class="section-header">Events This Month</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-label">Events This Month</div>', unsafe_allow_html=True)
         for d in sorted(event_map.keys()):
             for ticker in event_map[d]:
                 row = next((x for x in rows if x["ticker"] == ticker), {})
                 st.markdown(
-                    f"**`{ticker}`** &nbsp;·&nbsp; {row.get('company','')}"
-                    f" &nbsp;·&nbsp; {d.strftime('%A, %B %d')} &nbsp; {earnings_badge(d)}",
-                    unsafe_allow_html=True,
-                )
+                    f'<span class="ticker-chip">{ticker}</span>'
+                    f'&nbsp; <span class="company-name" style="font-size:0.85rem;">{row.get("company","")}</span>'
+                    f'&nbsp;·&nbsp; <span class="date-text">{d.strftime("%A, %B %d")}</span>'
+                    f'&nbsp; {earnings_badge(d)}',
+                    unsafe_allow_html=True)
+                st.markdown('<div style="height:6px;"></div>', unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────
 # GITHUB BUTTON (fixed top-right)
 # ─────────────────────────────────────────────
-GITHUB_URL = "https://github.com/tp2322/MPSIF-Earnings-Cal"
-
 st.markdown(f"""
 <a href="{GITHUB_URL}" target="_blank" style="
-    position: fixed;
-    top: 16px;
-    right: 16px;
-    z-index: 9999;
-    background: #21262d;
-    border: 1px solid #30363d;
-    border-radius: 6px;
-    padding: 6px 12px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.75rem;
-    color: #8b949e;
-    text-decoration: none;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    transition: border-color 0.2s, color 0.2s;
-" onmouseover="this.style.borderColor='#58a6ff';this.style.color='#58a6ff'"
-   onmouseout="this.style.borderColor='#30363d';this.style.color='#8b949e'">
+    position:fixed; top:16px; right:16px; z-index:9999;
+    background:#ffffff; border:1px solid #e2e8f0;
+    border-radius:8px; padding:6px 12px;
+    font-family:'Inter',sans-serif; font-size:0.75rem;
+    font-weight:500; color:#475569;
+    text-decoration:none; display:flex; align-items:center; gap:6px;
+    box-shadow:0 1px 4px rgba(0,0,0,0.08);
+    transition:border-color 0.15s,color 0.15s;"
+  onmouseover="this.style.borderColor='#1e3a5f';this.style.color='#1e3a5f'"
+  onmouseout="this.style.borderColor='#e2e8f0';this.style.color='#475569'">
   <svg height="14" width="14" viewBox="0 0 16 16" fill="currentColor">
     <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
     0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13
@@ -903,9 +1056,10 @@ st.markdown(f"""
 # ─────────────────────────────────────────────
 st.markdown("<br><br>", unsafe_allow_html=True)
 st.markdown(
-    '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:0.7rem;color:#30363d;text-align:center;">'
-    f'MPSIF Earnings Calendar · Data via Yahoo Finance · Earnings dates may be estimates · '
-    f'Refreshed: {datetime.now().strftime("%Y-%m-%d %H:%M")} ET'
-    '</div>',
+    f'<div style="font-family:\'JetBrains Mono\',monospace;font-size:0.68rem;'
+    f'color:#cbd5e1;text-align:center;">'
+    f'MPSIF Earnings Calendar · Data via Yahoo Finance · Estimates may vary · '
+    f'Refreshed {datetime.now().strftime("%Y-%m-%d %H:%M")} ET'
+    f'</div>',
     unsafe_allow_html=True,
 )
